@@ -2,8 +2,8 @@ import java.lang.StringBuilder
 
 class Grid(val rows: MutableList<String>, val cols: MutableList<String>) {
     
-    val width = rows.size
-    val height = cols.size
+    val width = cols.size
+    val height = rows.size
     
     constructor(data: List<String>) : this(data.toMutableList(),
                                            mutableListOf<String>()) {
@@ -28,6 +28,43 @@ class Grid(val rows: MutableList<String>, val cols: MutableList<String>) {
         recalculateRows()
     }
     
+    fun copyOf(): Grid {
+        return Grid(rows, cols)
+    }
+
+    fun coordinateOf(value: Char): Coordinate {
+        var x = -1
+        var y = -1
+        rows.forEachIndexed { idx, row ->
+            val charIndex = row.indexOf(value)
+            if (charIndex > 0) {
+                y = idx
+                x = charIndex
+                return Coordinate(charIndex, y)
+            }
+        }
+        return Coordinate(x,y)
+    }
+
+    fun set(value: Char, at: Coordinate) {
+        val rowCopy = rows[at.y].toCharArray().toMutableList()
+        rowCopy[at.x] = value
+        rows[at.y] = rowCopy.joinToString("")
+        recalculateCols()
+    }
+
+    fun get(at: Coordinate): Char {
+        return rows[at.y][at.x]
+    }
+
+    fun traverse(onVisit: (Coordinate, Char) -> Unit) {
+        rows.forEachIndexed { x, row ->
+            cols.forEachIndexed{ y, col ->
+                onVisit(Coordinate(x,y), row[y])
+            }
+        }
+    }
+
     private fun recalculateCols() {
         cols.clear()
         val sb = StringBuilder()

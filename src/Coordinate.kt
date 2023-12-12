@@ -1,6 +1,6 @@
 import kotlin.math.abs
 
-class Coordinate(val x: Int, val y: Int) {
+open class Coordinate(val x: Int, val y: Int) {
     fun isAbove(other: Coordinate): Boolean {
         return y < other.y
     }
