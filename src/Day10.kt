@@ -199,7 +199,7 @@ class PipeMap(data: List<String>) {
         }
         
         // right
-        if (x != original.width-1) {
+        if (x != original.width()-1) {
             adjacentPoints.add(Coordinate(x+1, y))
         }
         
@@ -209,7 +209,7 @@ class PipeMap(data: List<String>) {
         }
         
         // below
-        if (y != original.height-1) {
+        if (y != original.height()-1) {
             adjacentPoints.add(Coordinate(x, y+1))
         }
         return adjacentPoints
@@ -247,7 +247,7 @@ class DirectionalCoordinate(coordinate: Coordinate, var inside: Cardinal = Cardi
             } else if (b1 == 'F' && b2 == 'J') {
                 return Cardinal.DOWN
             } else if (b1 == 'J' && b2 == '7') {
-                return Cardinal.
+//                return Cardinal.
             }
             
             return Cardinal.UNKNOWN
