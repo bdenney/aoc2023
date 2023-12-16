@@ -1,147 +1,161 @@
-
-import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 
 fun main() {
-    
-    fun part01(input: List<String>) {
-        val map = PipeMap(input)
-        println(map.findFurthestPoint())
-    }
-    
-    fun part02(input: List<String>) {
-        val map = PipeMap(input)
-        val copy = map.original.copyOf()
-        val bends = mutableListOf<Coordinate>()
-        
-        val firstBend = map.findNextBend(map.start)
-        var nextBend = firstBend 
-        do {
-            bends.add(nextBend)
-            nextBend = map.findNextBend(nextBend)
-        } while (nextBend != firstBend)
-        
-        while (bends.isNotEmpty()) {
-            val bend = bends.removeFirst()
-            val nextBend = bends.first()
-            println("from bend: $bend to $nextBend")
-            
-            
-            // get points between bends
-            val startPath = map.path.indexOf(bend)
-            var endPath = map.path.indexOf(nextBend) 
-            if (endPath == 0) {
-                endPath = map.path.size-1
-                bends.removeFirst()
-            }
-            val points = map.path.subList(startPath, endPath)
-            points.forEach {
-                val index = map.path.indexOf(it)
-                
-                map.path[index] = DirectionalCoordinate(map.path[index], DirectionalCoordinate.determineCardinal(copy.get(bend), copy.get(nextBend)))
-            }
-            
-            println("path points: $points")
-            
-            // set directions
-            map.path.forEach {
-                if (it is DirectionalCoordinate) {
-                    copy.set(it.inside.char, it)
-                }
-            }
-            
-            copy.print()
-        }
-    }
-    
+
     val input = readInput("Day10Input")
     
-//    print("Part 1: ")
-//    part01(input)
-    
-    println("Part 2: ")
-    part02(input)
+    val map = PipeMap(input)
+//    map.grid.print()
+//    println("")
+
+    // collect all boundaries
+    val boundaries = mutableListOf<Pair<IntRange, IntRange>>()
+    var ptr = 1
+    var prevBend = map.verticies[0]
+    while (ptr < map.verticies.size ) {
+        var nextBend = map.verticies[ptr]
+
+        boundaries.add(Pair(IntRange(min(prevBend.x, nextBend.x), max(nextBend.x, prevBend.x)),
+                            IntRange(min(prevBend.y, nextBend.y), max(prevBend.y, nextBend.y))))
+        prevBend = nextBend
+        ptr++
+    }
+
+//    println("boundaries: ${boundaries}")
+
+    // collect all empty spaces
+    var empties = mutableListOf<Coordinate>()
+    map.grid.rows.forEachIndexed { colIndex, col ->
+        col.forEachIndexed { rowIndex, value ->
+            val coordinate = Coordinate(rowIndex, colIndex)
+            if (value != '*') {
+                empties.add(coordinate)
+                map.grid.set('.', coordinate)
+            }
+        }
+    }
+
+    // test each empty to see how many of our boundaries it crosses
+    val internal = mutableListOf<Coordinate>()
+    empties.forEach { emptyTile ->
+        var intersections = mutableListOf<Coordinate>()
+//        println("testing $emptyTile")
+        boundaries.forEach { boundary ->
+//            println("\tboundary: $boundary")
+            intersections.addAll(intersectsBoundary(emptyTile, boundary))
+        }
+        var boundariesCrossed = intersections.size
+        if (((boundariesCrossed) % 2 != 0)) {
+//            println("$emptyTile: $intersections")
+            internal.add(emptyTile)
+        }
+    }
+//    println("$internal")
+//    internal.forEach {
+//        map.grid.set('I', it)
+//    }
+//    map.grid.print()
+    println("Count: ${internal.size}")
 }
 
-fun Array<CharArray>.print() {
-    var count = 0
-    this.forEach {
-        println("$count  ${it.joinToString("")}")
-        count++
-    }
-}
+fun intersectsBoundary(coordinate: Coordinate, boundary: Pair<IntRange,IntRange>): List<Coordinate> {
+    var intersections = mutableListOf<Coordinate>()
+    for (y in coordinate.y downTo 0) {
 
-private fun Array<CharArray>.deepCopyOf(): Array<CharArray> {
-    val copy = this.copyOf()
-    this.indices.forEach {
-        copy[it] = this[it].copyOf()
+        if ((coordinate.x > boundary.first.first && coordinate.x <= boundary.first.last)
+            && boundary.second.contains(y)) {
+//            print("\t${coordinate.x}, $y: ")
+//            println("true")
+            intersections.add(Coordinate(coordinate.x, y))
+        }
     }
-    return copy
+    return intersections
 }
 
 class PipeMap(data: List<String>) {
-    val original = Grid(data)
-    val path : MutableList<Coordinate>
-    val start: Coordinate = original.coordinateOf('S')
-    private val pathHeads: List<Coordinate>
+    val grid = Grid(data)
+    val verticies: MutableList<Coordinate>
+    val start = findStart()
+    private val pathHeads = getPathHeads()
+    private val bendChars = setOf('L', 'J', '7', 'F')
 
     init {
-        pathHeads = getPathHeads(start)
-        path = traverse()
-        
-        val firstSet = getPossibleTileFromCoords(start, pathHeads[0])
-        val secondSet = getPossibleTileFromCoords(start, pathHeads[1])
-        original.set((firstSet intersect secondSet).first(), start)
+        val firstSet = getPossibleTileFromCoords(start, pathHeads.first)
+        val secondSet = getPossibleTileFromCoords(start, pathHeads.second)
+        grid.set((firstSet intersect secondSet).first(), start)
+
+        verticies = traversePath()
     }
-    
+
+    private fun findStart(): Coordinate {
+        var startX = -1
+        var startY = -1
+        var foundStart = false
+        var ptr = 0
+        while (!foundStart && ptr < grid.height()) {
+            val row = grid.row(ptr)
+            val startIndex = row.indexOf('S')
+            if (startIndex > -1) {
+                startX = startIndex
+                startY = ptr
+                foundStart = true
+            }
+            ptr++
+        }
+        return Coordinate(startX, startY)
+    }
+
     fun findFurthestPoint(): Int {
-        val points= traverse()
+        val points= traversePath()
         return points.size / 2
     }
-    
-    private fun traverse(): MutableList<Coordinate> {
-        val visited = mutableListOf<Coordinate>()
-        
+
+    private fun traversePath(): MutableList<Coordinate> {
+        val verticies = mutableListOf<Coordinate>()
+
         // get possible direction from start point
-        var step = pathHeads[0]
+        var current = pathHeads.first
         var previous = start
-        visited.add(start)
+//        println("\tstarting at: $start")
+
+        if (bendChars.contains(grid.get(start))) {
+//            println("\tadded vertex $start")
+            verticies.add(start)
+        }
+
+        if (bendChars.contains(grid.get(pathHeads.first))) {
+//            println("\tadded vertex ${pathHeads.first}")
+            verticies.add(pathHeads.first)
+        }
 
         // follow the path until we end back at the start
-        while (step != start) {
-            visited.add(step)
-            
+        while (current != start) {
+
+//            println("")
             // travel one tile in each direction
-            val next = findNextTile(step, previous)
-            
-            previous = step
-            step = next
-        }
-        
-        // the answer is the count for when the paths meet
-        return visited
-    }
-    
-    fun findNextBend(start: Coordinate): Coordinate {
-        var index = path.indexOf(start) + 1
-        if (index > path.size-1) {
-            index = 0
-        }
-        
-        val bends = setOf('L', 'J', '7', 'F')
-        var nextCoord = path[index]
-        while (!bends.contains(original.get(nextCoord))) {
-            index++
-            if (index > path.size-1) {
-                index = 0
+            val next = findNextTile(current, previous)
+            if (bendChars.contains(grid.get(next))) {
+//                println("\tadded vertex $next")
+                verticies.add(next)
             }
-            nextCoord = path[index]
+//            println("\t marking $previous")
+            grid.set('*', previous)
+            previous = current
+            current = next
+//            grid.print()
         }
-        return nextCoord
+        grid.set('*', previous)
+//        grid.print()
+//        println("")
+
+        // the answer is the count for when the paths meet
+//        println(verticies)
+        return verticies
     }
     
     private fun findNextTile(start: Coordinate, previous: Coordinate): Coordinate {
-        val candidates = generateAdjacentPoints(start)
+        val candidates = grid.getAdjacentPoints(start)
         var next: Coordinate? = null
         
         candidates.forEach {
@@ -157,18 +171,16 @@ class PipeMap(data: List<String>) {
         return next!!
     }
     
-    private fun getPathHeads(start: Coordinate): List<Coordinate> {
-        val candidates = generateAdjacentPoints(start)
-
-        // should be two possible coordinates from the start
+    private fun getPathHeads(): Pair<Coordinate, Coordinate> {
+        val candidates = grid.getAdjacentPoints(start)
         val pathHeads = mutableListOf<Coordinate>()
         candidates.forEach {
             if (canTravel(it, start)) {
                 pathHeads.add(it)
             }
         }
-        
-        return pathHeads
+
+        return Pair(pathHeads[0], pathHeads[1])
     }
     
     private fun getPossibleTileFromCoords(start: Coordinate, to: Coordinate): Set<Char> {
@@ -188,41 +200,14 @@ class PipeMap(data: List<String>) {
         return pathSymbols
     }
     
-    private fun generateAdjacentPoints(coord: Coordinate): List<Coordinate> {
-        val adjacentPoints = mutableListOf<Coordinate>()
-        val x = coord.x
-        val y = coord.y
-        
-        // left
-        if (x != 0) {
-            adjacentPoints.add(Coordinate(x-1, y))
-        }
-        
-        // right
-        if (x != original.width()-1) {
-            adjacentPoints.add(Coordinate(x+1, y))
-        }
-        
-        // above
-        if (y != 0) {
-            adjacentPoints.add(Coordinate(x, y-1))
-        }
-        
-        // below
-        if (y != original.height()-1) {
-            adjacentPoints.add(Coordinate(x, y+1))
-        }
-        return adjacentPoints
-    }
-    
-    private fun canTravel(there: Coordinate, here: Coordinate): Boolean {
-        when(original.get(there)) {
-            '|' -> return here.isAbove(there) || here.isBelow(there)
-            '-' -> return here.isLeftOf(there) || here.isRightOf(there)
-            'L' -> return here.isAbove(there) || here.isRightOf(there)
-            'J' -> return here.isAbove(there) || here.isLeftOf(there)
-            '7' -> return here.isBelow(there) || here.isLeftOf(there)
-            'F' -> return here.isBelow(there) || here.isRightOf(there)
+    private fun canTravel(from: Coordinate, to: Coordinate): Boolean {
+        when(grid.get(from)) {
+            '|' -> return to.isAbove(from) || to.isBelow(from)
+            '-' -> return to.isLeftOf(from) || to.isRightOf(from)
+            'L' -> return to.isAbove(from) || to.isRightOf(from)
+            'J' -> return to.isAbove(from) || to.isLeftOf(from)
+            '7' -> return to.isBelow(from) || to.isLeftOf(from)
+            'F' -> return to.isBelow(from) || to.isRightOf(from)
             '.' -> return false
             'S' -> return false
             else -> {
@@ -230,34 +215,5 @@ class PipeMap(data: List<String>) {
                 return false
             }
         }
-    }
-}
-
-class DirectionalCoordinate(coordinate: Coordinate, var inside: Cardinal = Cardinal.UNKNOWN) : Coordinate(coordinate.x, coordinate.y) {
-    companion object {
-        fun determineCardinal(b1: Char, b2: Char) : Cardinal {
-            if (b1 == 'L' && b2 == 'J') {
-                return Cardinal.UP
-            } else if (b1 == '7' && b2 == 'J') {
-                return Cardinal.LEFT
-            } else if (b1 == 'J' && b2 == 'L') {
-                return Cardinal.UP
-            } else if (b1 == 'L' && b2 == 'F') {
-                return Cardinal.RIGHT
-            } else if (b1 == 'F' && b2 == 'J') {
-                return Cardinal.DOWN
-            } else if (b1 == 'J' && b2 == '7') {
-//                return Cardinal.
-            }
-            
-            return Cardinal.UNKNOWN
-        }
-    }
-    enum class Cardinal(val char: Char) {
-        UP('u'),
-        RIGHT('r'),
-        DOWN('d'),
-        LEFT('l'),
-        UNKNOWN('?')
     }
 }
