@@ -1,99 +1,132 @@
 import java.lang.StringBuilder
 
-class Grid(val rows: MutableList<String>, val cols: MutableList<String>) {
+class Grid(originalData: List<String>) {
     
-    val width = cols.size
-    val height = rows.size
+    fun width(): Int = cols.size
+    fun height(): Int = rows.size
+
+    val rows = Array(originalData.size) { CharArray(originalData[0].length) }
     
-    constructor(data: List<String>) : this(data.toMutableList(),
-                                           mutableListOf<String>()) {
-        recalculateCols()
+    val cols  = Array(originalData[0].length) { CharArray(originalData.size) }
+
+    init {
+        originalData.forEachIndexed { row, input ->
+            // each line in the input is a row
+            val rowArray = input.toCharArray()
+            rowArray.copyInto(rows[row])
+
+            // each entry in the row array is a column value at index $col
+            rowArray.forEachIndexed { col, char -> cols[col][row] = char }
+        }
     }
-    
-    fun row(index: Int): String {
-        return rows[index]
+
+    fun row(index: Int): CharArray {
+        return rows[index].copyOf()
     }
-    
-    fun column(index: Int): String {
-        return cols[index]
+
+    fun column(index: Int): CharArray {
+        return cols[index].copyOf()
     }
     
     fun insertRow(row: String, afterIndex: Int) {
-        rows.add(afterIndex+1, row)
-        recalculateCols()
-    }
-    
-    fun insertColumn(col: String, afterIndex: Int) {
-        cols.add(afterIndex+1, col)
-        recalculateRows()
-    }
-    
-    fun copyOf(): Grid {
-        return Grid(rows, cols)
+        throw NotImplementedError("Insert row not yet implemented!")
     }
 
-    fun coordinateOf(value: Char): Coordinate {
-        var x = -1
-        var y = -1
-        rows.forEachIndexed { idx, row ->
-            val charIndex = row.indexOf(value)
-            if (charIndex > 0) {
-                y = idx
-                x = charIndex
-                return Coordinate(charIndex, y)
-            }
-        }
-        return Coordinate(x,y)
+    fun replaceRow(row: CharArray, index: Int) {
+        row.copyInto(rows[index])
+        row.forEachIndexed { col, char -> cols[col][index] = char }
+    }
+
+    fun insertColumn(col: String, afterIndex: Int) {
+        throw NotImplementedError("Insert column not yet implemented!")
+    }
+
+    fun replaceColumn(col: CharArray, index: Int) {
+        col.copyInto(cols[index])
+        col.forEachIndexed { row, char -> rows[row][index] = char }
+    }
+
+    fun copyOf(): Grid {
+        throw NotImplementedError("copyOf not yet implemented.")
     }
 
     fun set(value: Char, at: Coordinate) {
-        val rowCopy = rows[at.y].toCharArray().toMutableList()
-        rowCopy[at.x] = value
-        rows[at.y] = rowCopy.joinToString("")
-        recalculateCols()
+        rows[at.y][at.x] = value
+        cols[at.x][at.y] = value
+    }
+
+    /**
+     * Returns the list of points to the top, left, right, and bottom to the the given
+     * coordinate if it exists within the grid.
+     *
+     * @param coordinate the coordinate a get the adjacent points for
+     * @return list of coordinates that are adjacent to the given point
+     */
+    fun getAdjacentPoints(coordinate: Coordinate): List<Coordinate> {
+        val adjacentPoints = mutableListOf<Coordinate>()
+        val x = coordinate.x
+        val y = coordinate.y
+
+        // left
+        if (x != 0) {
+            adjacentPoints.add(Coordinate(x-1, y))
+        }
+
+        // right
+        if (x != width()-1) {
+            adjacentPoints.add(Coordinate(x+1, y))
+        }
+
+        // above
+        if (y != 0) {
+            adjacentPoints.add(Coordinate(x, y-1))
+        }
+
+        // below
+        if (y != height()-1) {
+            adjacentPoints.add(Coordinate(x, y+1))
+        }
+        return adjacentPoints
     }
 
     fun get(at: Coordinate): Char {
         return rows[at.y][at.x]
     }
 
-    fun traverse(onVisit: (Coordinate, Char) -> Unit) {
-        rows.forEachIndexed { x, row ->
-            cols.forEachIndexed{ y, col ->
-                onVisit(Coordinate(x,y), row[y])
-            }
-        }
+    fun isInBounds(coordinate: Coordinate): Boolean {
+        return isInBounds(coordinate.x, coordinate.y)
     }
 
-    private fun recalculateCols() {
-        cols.clear()
-        val sb = StringBuilder()
-        rows[0].indices.forEach { col ->
-            for (index in 0..<rows.size) {
-                sb.append(rows[index][col])
-            }
-            cols.add(sb.toString())
-            sb.clear()
-        }
+    fun isInBounds(x: Int, y: Int): Boolean {
+        /*     left      right               above       below          */
+        return x >= 0 && (x <= width()-1) && (y >= 0) && (y <= height()-1)
+    }
+
+    fun traverse(onVisit: (Coordinate, Char) -> Unit) {
+        throw NotImplementedError("traverse not yet implemented")
+    }
+
+    private fun recalculateCols(forRowIndex: Int) {
+        rows[forRowIndex].forEachIndexed { col, char -> cols[forRowIndex][col] = char }
     }
     
-    private fun recalculateRows() {
-        rows.clear()
-        val sb = StringBuilder()
-        cols[0].indices.forEach { row ->
-            for (index in 0..<cols.size) {
-                sb.append(cols[index][row])
-            }
-            rows.add(sb.toString())
-            sb.clear()
-        }
+    private fun recalculateRows(forColIndex: Int) {
+        cols[forColIndex].forEachIndexed { row, char -> rows[row][forColIndex] = char }
     }
     
     fun print() {
         var count = 0
-        this.rows.forEach {
-            println("$count\t$it")
+        rows.forEach {
+            println("$count\t${it.joinToString("")}")
             count++
         }
+    }
+
+    override fun hashCode(): Int {
+        var sb = StringBuilder()
+        cols.forEach {
+            sb.append(it.joinToString(""))
+        }
+        return sb.hashCode()
     }
 }
